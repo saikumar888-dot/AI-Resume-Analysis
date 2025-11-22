@@ -2,6 +2,7 @@ import streamlit as st
 from pdfminer.high_level import extract_text
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+from reportlab.lib.pagesizes import A4
 from groq import Groq
 import re
 from dotenv import load_dotenv
