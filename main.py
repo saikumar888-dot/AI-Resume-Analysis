@@ -1,318 +1,177 @@
-import streamlit as st
-from pdfminer.high_level import extract_text
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-from reportlab.lib.pagesizes import A4
-from groq import Groq
-import re
-from dotenv import load_dotenv
+import streamlit as st                            # For Web Interface (Front-End)
+from pdfminer.high_level import extract_text      # To Extract Text from Resume PDF
+from sentence_transformers import SentenceTransformer      # To generate Embeddings of text
+from sklearn.metrics.pairwise import cosine_similarity     # To get Similarity Score of Resume and Job Description
+from groq import Groq                             # API to use LLM's
+import re                                         # To perform Regular Expression Functions
+from dotenv import load_dotenv                    # Loading API Key from .env file
 import os
-import io
-import datetime
 
-# PDF-related imports
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
-    Image
-)
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
 
-import matplotlib.pyplot as plt
-
-# ---------------- ENV + SESSION SETUP ----------------
-
+# Load environment variables from .env
 load_dotenv()
+
+# Fetch the key from the environment
 api_key = os.getenv("GROQ_API_KEY")
 
+
+#  Session States to store values 
 if "form_submitted" not in st.session_state:
     st.session_state.form_submitted = False
-if "resume" not in st.session_state:
-    st.session_state.resume = ""
-if "job_desc" not in st.session_state:
-    st.session_state.job_desc = ""
 
+if "resume" not in st.session_state:
+    st.session_state.resume=""
+
+if "job_desc" not in st.session_state:
+    st.session_state.job_desc=""
+
+
+
+# Title of the Project, change according to your style
 st.title("AI Resume Analyzer 📝")
 
 
-# ---------------- CORE FUNCTIONS ----------------
 
+# <------- Defining Functions ------->
+
+# Function to extract text from PDF
 def extract_pdf_text(uploaded_file):
-    """Extract raw text from a PDF file."""
     try:
-        return extract_text(uploaded_file)
+        extracted_text = extract_text(uploaded_file)
+        return extracted_text
     except Exception as e:
         st.error(f"Error extracting text from PDF: {str(e)}")
-        return ""
+        return "Could not extract text from the PDF file."
 
 
+# Function to calculate similarity 
 def calculate_similarity_bert(text1, text2):
-    """Calculate semantic similarity using sentence-transformers."""
-    ats_model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
-    emb1 = ats_model.encode([text1])
-    emb2 = ats_model.encode([text2])
-    sim = cosine_similarity(emb1, emb2)[0][0]
-    return sim
+    ats_model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')      # Use BERT or SBERT or any model you want
+    # Encode the texts directly to embeddings
+    embeddings1 = ats_model.encode([text1])
+    embeddings2 = ats_model.encode([text2])
+    
+    # Calculate cosine similarity without adding an extra list layer
+    similarity = cosine_similarity(embeddings1, embeddings2)[0][0]
+    return similarity
 
 
-def get_report(resume, job_desc):
-    """Call Groq LLM to generate a detailed resume vs JD analysis."""
+def get_report(resume,job_desc):
     client = Groq(api_key=api_key)
-    prompt = f"""
-    You are an AI Resume Analyzer. Compare the candidate's resume against the job description.
 
-    Requirements:
-    - Identify key skills, experience, tools, and qualifications from the job description.
-    - For each important point, score the resume's match out of 5. Format like: "✅ Skill XYZ – 4/5 – explanation..."
-      - Use ✅ when the resume clearly matches.
-      - Use ❌ when it clearly does not match.
-      - Use ⚠ when it is unclear or partially met.
-    - At the end, include a section with the heading:
-      "Suggestions to improve your resume:"
-      and list concrete, actionable suggestions.
+    # Change the prompt to get the results in your style
+    prompt=f"""
+    # Context:
+    - You are an AI Resume Analyzer, you will be given Candidate's resume and Job Description of the role he is applying for.
 
-    Resume:
-    {resume}
+    # Instruction:
+    - Analyze candidate's resume based on the possible points that can be extracted from job description,and give your evaluation on each point with the criteria below:  
+    - Consider all points like required skills, experience,etc that are needed for the job role.
+    - Calculate the score to be given (out of 5) for every point based on evaluation at the beginning of each point with a detailed explanation.  
+    - If the resume aligns with the job description point, mark it with ✅ and provide a detailed explanation.  
+    - If the resume doesn't align with the job description point, mark it with ❌ and provide a reason for it.  
+    - If a clear conclusion cannot be made, use a ⚠️ sign with a reason.  
+    - The Final Heading should be "Suggestions to improve your resume:" and give where and what the candidate can improve to be selected for that job role.
 
+    # Inputs:
+    Candidate Resume: {resume}
     ---
-    Job Description:
-    {job_desc}
+    Job Description: {job_desc}
+
+    # Output:
+    - Each any every point should be given a score (example: 3/5 ). 
+    - Mention the scores and  relevant emoji at the beginning of each point and then explain the reason.
     """
-    completion = client.chat.completions.create(
+
+    chat_completion = client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
         model="llama-3.3-70b-versatile",
     )
-    return completion.choices[0].message.content
-
+    return chat_completion.choices[0].message.content
 
 def extract_scores(text):
-    """Extract all x/5 scores from the LLM report."""
+    # Regular expression pattern to find scores in the format x/5, where x can be an integer or a float
     pattern = r'(\d+(?:\.\d+)?)/5'
+    # Find all matches in the text
     matches = re.findall(pattern, text)
-    return [float(m) for m in matches]
+    # Convert matches to floats
+    scores = [float(match) for match in matches]
+    return scores
 
 
-# ---------------- PDF GENERATION ----------------
-
-def create_score_chart(ats_score, avg_score):
-    """
-    Create a simple bar chart comparing ATS similarity and AI evaluation.
-    Returns an in-memory PNG buffer.
-    """
-    fig, ax = plt.subplots(figsize=(4, 3))
-    ats_percent = ats_score * 100
-    ai_percent = avg_score * 20 * 100 / 100  # avg_score is 0–1 when used below
-
-    labels = ["ATS Similarity (%)", "AI Evaluation (%)"]
-    values = [ats_percent, avg_score * 100]  # avg_score is in 0–1 range
-
-    ax.bar(labels, values)
-    ax.set_ylim(0, 100)
-    ax.set_ylabel("Percentage")
-    ax.set_title("Resume Match Overview")
-
-    buf = io.BytesIO()
-    plt.tight_layout()
-    fig.savefig(buf, format="png")
-    plt.close(fig)
-    buf.seek(0)
-    return buf
 
 
-def generate_pdf_report(resume, job_desc, ats_score, avg_score, report):
-    """
-    Generate a professional PDF report with:
-    - Title
-    - Date
-    - Scores table
-    - Simple bar chart
-    - Full AI feedback
-    - Footer with reviewer
-    Returns raw PDF bytes.
-    """
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4,
-                            rightMargin=40, leftMargin=40,
-                            topMargin=40, bottomMargin=40)
+# <--------- Starting the Work Flow ---------> 
 
-    styles = getSampleStyleSheet()
-
-    # Custom styles
-    title_style = ParagraphStyle(
-        name="TitleStyle",
-        parent=styles["Title"],
-        fontSize=20,
-        leading=26,
-        alignment=1,  # center
-        textColor=colors.white,
-        backColor=colors.HexColor("#1976D2"),
-        spaceAfter=18
-    )
-
-    heading_style = ParagraphStyle(
-        name="HeadingStyle",
-        parent=styles["Heading2"],
-        fontSize=14,
-        textColor=colors.HexColor("#1976D2"),
-        spaceAfter=8
-    )
-
-    body_style = ParagraphStyle(
-        name="BodyStyle",
-        parent=styles["BodyText"],
-        fontSize=11,
-        leading=16
-    )
-
-    footer_style = ParagraphStyle(
-        name="FooterStyle",
-        parent=styles["Normal"],
-        fontSize=9,
-        textColor=colors.gray,
-        alignment=1,
-        spaceBefore=20
-    )
-
-    story = []
-
-    # Title
-    story.append(Paragraph("AI Resume Analysis Report", title_style))
-    story.append(Spacer(1, 12))
-
-    # Date
-    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    story.append(Paragraph(f"Generated on: {now_str}", body_style))
-    story.append(Spacer(1, 12))
-
-    # Summary heading
-    story.append(Paragraph("Summary", heading_style))
-
-    # Scores table
-    ats_percent = round(ats_score * 100, 2)
-    ai_percent = round(avg_score * 100, 2)
-
-    table_data = [
-        ["Metric", "Value"],
-        ["ATS Similarity Score", f"{ats_percent} %"],
-        ["AI Evaluation Score", f"{ai_percent} % (≈ {round(avg_score*5,2)}/5)"],
-    ]
-
-    summary_table = Table(table_data, colWidths=[180, 260])
-    summary_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#BBDEFB")),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#90CAF9")),
-    ]))
-    story.append(summary_table)
-    story.append(Spacer(1, 16))
-
-    # Chart
-    story.append(Paragraph("Score Overview", heading_style))
-    chart_buf = create_score_chart(ats_score, avg_score)
-    chart_img = Image(chart_buf, width=300, height=220)
-    story.append(chart_img)
-    story.append(Spacer(1, 16))
-
-    # Optional short summary section
-    story.append(Paragraph("Candidate & Role Summary", heading_style))
-    story.append(Paragraph(
-        "This report analyzes how well the candidate's resume aligns with the provided job description "
-        "in terms of skills, experience, and relevance. The AI system also provides suggestions to improve "
-        "the resume for a better match.",
-        body_style
-    ))
-    story.append(Spacer(1, 12))
-
-    # AI Report section
-    story.append(Paragraph("Detailed AI Feedback & Evaluation", heading_style))
-
-    for line in report.split("\n"):
-        line = line.strip()
-        if not line:
-            continue
-        story.append(Paragraph(line, body_style))
-        story.append(Spacer(1, 4))
-
-    # Footer / signature
-    story.append(Spacer(1, 18))
-    story.append(Paragraph("Reviewed by: AI Resume Analyzer", footer_style))
-
-    doc.build(story)
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
-
-
-# ---------------- STREAMLIT WORKFLOW ----------------
-
+# Displays Form only if the form is not submitted
 if not st.session_state.form_submitted:
-    with st.form("input_form"):
-        resume_file = st.file_uploader("Upload your Resume (PDF)", type="pdf")
-        st.session_state.job_desc = st.text_area(
-            "Enter Job Description:",
-            placeholder="Paste the job description here..."
-        )
+    with st.form("my_form"):
 
-        if st.form_submit_button("Analyze"):
-            if resume_file and st.session_state.job_desc:
-                st.info("Extracting resume text...")
-                st.session_state.resume = extract_pdf_text(resume_file)
+        # Taking input a Resume (PDF) file 
+        resume_file = st.file_uploader(label="Upload your Resume/CV in PDF format", type="pdf")
+
+        # Taking input Job Description
+        st.session_state.job_desc = st.text_area("Enter the Job Description of the role you are applying for:",placeholder="Job Description...")
+
+        # Form Submission Button
+        submitted = st.form_submit_button("Analyze")
+        if submitted:
+
+            #  Allow only if Both Resume and Job Description are Submitted
+            if st.session_state.job_desc and resume_file:
+                st.info("Extracting Information")
+
+                st.session_state.resume = extract_pdf_text(resume_file)      # Calling the function to extract text from Resume
+
                 st.session_state.form_submitted = True
-                st.rerun()
+                st.rerun()                 # Refresh the page to close the form and give results
+
+            # Donot allow if not uploaded
             else:
-                st.warning("Please upload both Resume and Job Description.")
+                st.warning("Please Upload both Resume and Job Description to analyze")
+
 
 if st.session_state.form_submitted:
-    st.info("Generating scores and AI analysis...")
+    score_place = st.info("Generating Scores...")
 
-    ats_score = calculate_similarity_bert(
-        st.session_state.resume,
-        st.session_state.job_desc
-    )
+    # Call the function to get ATS Score
+    ats_score = calculate_similarity_bert(st.session_state.resume,st.session_state.job_desc)
 
-    report = get_report(
-        st.session_state.resume,
-        st.session_state.job_desc
-    )
-
-    scores = extract_scores(report)
-    avg_score = sum(scores) / (len(scores) * 5) if scores else 0.0
-
-    col1, col2 = st.columns(2)
+    col1,col2 = st.columns(2,border=True)
     with col1:
-        st.write("ATS-based similarity score:")
-        st.subheader(f"{round(ats_score * 100, 2)} %")
+        st.write("Few ATS uses this score to shortlist candidates, Similarity Score:")
+        st.subheader(str(ats_score))
+
+    # Call the function to get the Analysis Report from LLM (Groq)
+    report = get_report(st.session_state.resume,st.session_state.job_desc)
+
+    # Calculate the Average Score from the LLM Report
+    report_scores = extract_scores(report)                 # Example : [3/5, 4/5, 5/5,...]
+    avg_score = sum(report_scores) / (5*len(report_scores))  # Example: 2.4
+
+
     with col2:
-        st.write("AI Evaluation Score (approx):")
-        st.subheader(f"{round(avg_score*5, 2)} / 5")
+        st.write("Total Average score according to our AI report:")
+        st.subheader(str(avg_score))
+    score_place.success("Scores generated successfully!")
 
-    st.subheader("AI Generated Detailed Report:")
-    st.markdown(
-        f"<div style='text-align: left; background-color: #111; "
-        f"padding: 10px; border-radius: 10px;'>{report}</div>",
-        unsafe_allow_html=True
-    )
 
-    # PDF download
-    pdf_bytes = generate_pdf_report(
-        resume=st.session_state.resume,
-        job_desc=st.session_state.job_desc,
-        ats_score=ats_score,
-        avg_score=avg_score,
-        report=report
-    )
+    st.subheader("AI Generated Analysis Report:")
 
+    # Displaying Report 
+    st.markdown(f"""
+            <div style='text-align: left; background-color: #000000; padding: 10px; border-radius: 10px; margin: 5px 0;'>
+                {report}
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Download Button
     st.download_button(
-        label="📄 Download PDF Report",
-        data=pdf_bytes,
-        file_name="resume_analysis_report.pdf",
-        mime="application/pdf"
-    )
+        label="Download Report",
+        data=report,
+        file_name="report.txt",
+        icon=":material/download:",
+        )
+    
+
+# <-------------- End of the Work Flow --------------->
