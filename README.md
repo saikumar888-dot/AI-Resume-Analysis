@@ -1,57 +1,59 @@
-Hello
-AI Resume Analyzer 📝
-The AI Resume Analyzer is an intelligent web-based tool designed to help job seekers evaluate and enhance their resumes by comparing them directly against a specific job description. Leveraging advanced AI models, this tool simulates how Applicant Tracking Systems (ATS) and recruiters assess your resume for relevance, alignment, and suitability for a role. Completely in a single Python file.
+# AI Resume Analyzer 📝
 
-🔍 What Does This Project Do?
-1. Resume Text Extraction
-Users upload their resumes in PDF format, and the system automatically extracts the raw text for further analysis.
+AI Resume Analyzer is an intelligent web-based tool that helps job seekers evaluate and improve their resumes. It compares your resume against a target job description using advanced AI, simulates ATS screening, and provides actionable feedback—all in a single Python file.
 
-2. Job Description Input
-The user provides the job description for the position they are targeting. This sets the criteria against which the resume will be evaluated.
+## Features
 
-3. ATS Similarity Score
-Using Sentence Transformers (BERT-based model), the tool calculates a similarity score between the resume and the job description. This score reflects how well the resume matches keywords, context, and requirements typically scanned by ATS software.
+- **Resume Text Extraction**: Upload PDF resumes to extract text automatically.
+- **Job Description Input**: Paste the job description for analysis.
+- **ATS Similarity Score**: Sentence Transformers (BERT-based) calculate how well your resume matches the job criteria.
+- **AI-Powered Evaluation**: Groq's Llama-based LLM rates your resume, highlights strengths/gaps with emojis, and provides personalized suggestions.
+- **Downloadable Report**: Get a detailed, human-readable analysis to help optimize your resume.
 
-4. AI-Powered Resume Evaluation
-With the help of Groq's Llama-based LLM, the tool generates a detailed, human-readable evaluation report. The AI analyzes various factors such as skills, experience, and qualifications, assigning a score (out of 5) for each aspect and using emojis (✅, ❌, ⚠️) to quickly highlight strengths and gaps.
+## Installation
 
-5. Actionable Feedback
-The AI not only scores your resume but also provides personalized suggestions on how to improve it, helping candidates refine their applications before submission.
+**Prerequisites:**  
+- Python 3.x  
+- Git
 
-6. Downloadable Report
-Users can easily download the detailed analysis for reference, making it convenient to track and implement the suggested changes.
+**Setup Steps:**
 
-🎯 Why Use This Tool?
-Optimize for ATS: Understand how your resume fares in automated screenings.
-Get AI Insights: Receive professional-quality feedback without hiring a consultant.
-Improve Success Rate: Apply data-driven improvements to increase your chances of getting shortlisted.
-This project is perfect for job seekers who want to make sure their resumes are tailored to specific roles, career coaches looking for efficient feedback tools, or developers seeking to explore AI’s capabilities in HR-tech workflows.
+1. **Clone the repository**
+    ```bash
+    git clone https://github.com/Altoks-AI/AI-Resume-Analyzer.git
+    cd AI-Resume-Analyzer
+    ```
 
-⚙️ Installation Steps
-Follow these steps to set up and run the AI Resume Analyzer locally:
+2. **Create and activate a virtual environment**
+    ```bash
+    python -m venv myenv
+    # On Windows:
+    myenv\Scripts\activate
+    # On macOS/Linux:
+    source myenv/bin/activate
+    ```
 
-Make sure you have Python and Git installed.
+3. **Install dependencies**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-1️⃣ Clone the Repository
-git clone https://github.com/Altoks-AI/AI-Resume-Analyzer.git
-cd FolderName
-2️⃣ Set Up a Virtual Environment
-python -m venv myenv
-./myenv/Scripts/activate
-3️⃣ Install Dependencies
-Make sure you have pip updated, then install all required packages:
+4. **Set your Groq API Key**  
+   Create a `.env` file in the project root:
+    ```
+    GROQ_API_KEY=your_groq_api_key_here
+    ```
 
-pip install -r requirements.txt
-4️⃣ Set Up Your .env File
-Create a .env file in the root directory and add your Groq API key from Groq
+5. **Run the Streamlit app**
+    ```bash
+    streamlit run main.py
+    ```
 
-GROQ_API_KEY=your_groq_api_key_here
-5️⃣ Run the Streamlit App
-Launch the app locally using Streamlit:
+The app will open at [http://localhost:8501](http://localhost:8501).
 
-streamlit run main.py
-6️⃣ Open in Browser
-Once the app starts, it will automatically open in your default web browser at:
+## Usage
 
-http://localhost:8501
-✅ Now you’re all set! Upload a resume, paste a job description, and let the AI analyze your resume for job-fit and provide suggestions.
+- Upload your PDF resume.
+- Paste the job description.
+- View your similarity score and detailed feedback.
+- Download the report for reference.
